@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pharmacy App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            margin: auto;
+        }
+        input, button {
+            width: 90%;
+            padding: 10px;
+            margin: 10px 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .medicine-list, .store-details {
+            text-align: left;
+            margin-top: 20px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #map {
+            height: 300px;
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>User Authentication</h2>
+        <input type="text" id="name" placeholder="Enter your name">
+        <input type="email" id="email" placeholder="Enter your email">
+        <input type="password" id="password" placeholder="Enter your password">
+        <button onclick="register()">Register</button>
+        <button onclick="login()">Login</button>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <div class="container">
+        <h2>Online Pharmacy</h2>
+        <input type="text" id="search" placeholder="Search for medicines...">
+        <button onclick="searchMedicine()">Search</button>
+        <div id="result"></div>
+        <h3>Available Medicines</h3>
+        <ul class="medicine-list" id="medicine-list"></ul>
+        
+        <h3>Nearby Medical Stores</h3>
+        <div id="map"></div>
+        <div id="store-info" class="store-details"></div>
+    </div>
+
+    <script>
+        async function register() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            const res = await fetch('http://localhost:5000/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password })
+            });
+
+            const data = await res.json();
+            alert(data.message || data.error);
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            const res = await fetch('http://localhost:5000/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await res.json();
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                alert("Login Successful!");
+            } else {
+                alert(data.error);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            alert("Logged out successfully!");
+        }
+
+        async function fetchMedicines() {
+            try {
+                const response = await fetch('https://api.example.com/medicines'); // Replace with actual API
+                if (!response.ok) throw new Error("Failed to fetch medicines");
+                const data = await response.json();
+                displayMedicines(data);
+            } catch (error) {
+                console.error("Error fetching medicines:", error);
+            }
+        }
+
+        function displayMedicines(medicines) {
+            let list = document.getElementById("medicine-list");
+            list.innerHTML = "";
+            medicines.forEach(med => {
+                let li = document.createElement("li");
+                li.innerHTML = `<strong>${med.name}</strong> - $${med.price}`;
+                list.appendChild(li);
+            });
+        }
+
+        function searchMedicine() {
+            let query = document.getElementById("search").value.toLowerCase();
+            let resultDiv = document.getElementById("result");
+            if (query) {
+                fetch('https://api.example.com/medicines?search=' + query) // Replace with actual API
+                    .then(response => {
+                        if (!response.ok) throw new Error("Failed to fetch search results");
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.length > 0) {
+                            resultDiv.innerHTML = "<strong>Search Results:</strong> " + data.map(m => `${m.name} - $${m.price}`).join(", ");
+                        } else {
+                            resultDiv.innerHTML = "No medicines found.";
+                        }
+                    })
+                    .catch(error => console.error("Error fetching search results:", error));
+            } else {
+                resultDiv.innerHTML = "Please enter a medicine name.";
+            }
+        }
+
+        function initMap() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    let userLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
+                    let map = new google.maps.Map(document.getElementById("map"), {
+                        center: userLocation,
+                        zoom: 15
+                    });
+                    let service = new google.maps.places.PlacesService(map);
+                    service.nearbySearch({
+                        location: userLocation,
+                        radius: 5000,
+                        type: ["pharmacy"]
+                    }, (results, status) => {
+                        if (status === google.maps.places.PlacesServiceStatus.OK) {
+                            let storeInfo = document.getElementById("store-info");
+                            storeInfo.innerHTML = "<h3>Store Details</h3>";
+                            results.forEach(place => {
+                                new google.maps.Marker({
+                                    position: place.geometry.location,
+                                    map: map,
+                                    title: place.name
+                                });
+                                storeInfo.innerHTML += `<p><strong>${place.name}</strong><br>
+                                Address: ${place.vicinity || "N/A"}<br>
+                                Rating: ${place.rating || "N/A"}</p>`;
+                            });
+                        }
+                    });
+                }, () => {
+                    document.getElementById("map").innerHTML = "Location access denied.";
+                });
+            } else {
+                document.getElementById("map").innerHTML = "Geolocation is not supported by this browser.";
+            }
+        }
+
+        fetchMedicines();
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=initMap" async defer></script>
+</body>
+</html>
